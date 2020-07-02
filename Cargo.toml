@@ -2,6 +2,7 @@
 members = [
     "anima_solver",
     "brutalize",
+    "brutalize_cli",
     "sausage_solver",
     "solver_common",
 ]

@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    fmt,
+    str::FromStr,
+};
 use crate::vec2::Vec2;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -43,6 +46,17 @@ impl Direction {
             Direction::Up => Vec2::up(),
             Direction::Left => Vec2::left(),
             Direction::Down => Vec2::down(),
+        }
+    }
+}
+
+impl fmt::Display for Direction {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Direction::Right => write!(f, "Right"),
+            Direction::Up => write!(f, "Up"),
+            Direction::Left => write!(f, "Left"),
+            Direction::Down => write!(f, "Down"),
         }
     }
 }

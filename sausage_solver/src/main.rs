@@ -2,8 +2,7 @@
 extern crate test;
 
 use std::{
-    env,
-    fs,
+    fmt,
     num::ParseIntError,
     str::FromStr,
 };
@@ -311,48 +310,6 @@ impl State {
         result.sausages.sort_unstable();
         result
     }
-
-    fn print(&self, data: &Data) {
-        let board_width = data.size().x + 2;
-        let board_height = data.size().y + 2;
-        let size = board_width * board_height;
-        let mut board = Vec::with_capacity(size as usize);
-        board.resize(size as usize, ' ');
-
-        for y in 0..board_height {
-            for x in 0..board_width {
-                let index = x + y * board_width;
-                board[index as usize] = match data.tile(Vec2::new(x - 1, y - 1)) {
-                    Tile::Empty => ' ',
-                    Tile::Ground => '.',
-                    Tile::Grill => '#',
-                }
-            }
-        }
-
-        for sausage in self.sausages.iter() {
-            let index = (sausage.position.x + 1) + (sausage.position.y + 1) * board_width;
-            board[index as usize] = 'S';
-            let end_position = sausage.end_position();
-            let index = (end_position.x + 1) + (end_position.y + 1) * board_width;
-            board[index as usize] = 's';
-        }
-
-        let index = (self.player.position.x + 1) + (self.player.position.y + 1) * board_width;
-        board[index as usize] = 'P';
-        let fork_position = self.player.fork_position();
-        let index = (fork_position.x + 1) + (fork_position.y + 1) * board_width;
-        board[index as usize] = 'F';
-
-        for y in (0..board_height).rev() {
-            let begin = y * board_width;
-            let end = (y + 1) * board_width;
-            for c in &board[begin as usize..end as usize] {
-                print!("{}", c);
-            }
-            println!();
-        }
-    }
 }
 
 impl brutalize::State for State {
@@ -484,137 +441,176 @@ enum ParseError {
     MissingSausages,
 }
 
-fn parse(s: &str) -> Result<(State, Data), ParseError> {
-    let mut puzzle = None;
-    let mut start = None;
-    let mut sausages = None;
+impl brutalize_cli::State for State {
+    type ParseError = ParseError;
 
-    let mut lines = s.lines().enumerate();
-    while let Some((line_number, line)) = lines.next() {
-        let mut pieces = line.split(' ');
-        let command = pieces.next().ok_or(ParseError::MissingCommand { line_number, })?;
-        match command {
-            "puzzle" => {
-                if puzzle.is_some() {
-                    return Err(ParseError::PuzzleAlreadyDefined { line_number });
-                }
+    fn parse(s: &str) -> Result<(State, Data), ParseError> {
+        let mut puzzle = None;
+        let mut start = None;
+        let mut sausages = None;
 
-                let size_x = pieces.next()
-                    .ok_or(ParseError::MissingPuzzleSizeX { line_number })?
-                    .parse().map_err(|parse_error| ParseError::InvalidPuzzleSizeX { line_number, parse_error })?;
-                let size_y = pieces.next()
-                    .ok_or(ParseError::MissingPuzzleSizeY { line_number })?
-                    .parse().map_err(|parse_error| ParseError::InvalidPuzzleSizeY { line_number, parse_error })?;
-                let mut tiles = vec![Tile::Empty; size_x * size_y];
-
-                for y in (0..size_y).rev() {
-                    let (line_number, line) = lines.next()
-                        .ok_or(ParseError::UnexpectedEndOfPuzzle {
-                            expected_lines: size_y,
-                            found_lines: y,
-                        })?;
-
-                    if line.len() != size_x {
-                        return Err(ParseError::UnevenRows {
-                            line_number,
-                            data_width: size_x,
-                            line_width: line.len(),
-                        });
+        let mut lines = s.lines().enumerate();
+        while let Some((line_number, line)) = lines.next() {
+            let mut pieces = line.split(' ');
+            let command = pieces.next().ok_or(ParseError::MissingCommand { line_number, })?;
+            match command {
+                "puzzle" => {
+                    if puzzle.is_some() {
+                        return Err(ParseError::PuzzleAlreadyDefined { line_number });
                     }
 
-                    for (x, c) in line.chars().enumerate() {
-                        let tile = match c {
-                            ' ' => Ok(Tile::Empty),
-                            '.' => Ok(Tile::Ground),
-                            '#' => Ok(Tile::Grill),
-                            _ => Err(ParseError::UnexpectedCharacter {
+                    let size_x = pieces.next()
+                        .ok_or(ParseError::MissingPuzzleSizeX { line_number })?
+                        .parse().map_err(|parse_error| ParseError::InvalidPuzzleSizeX { line_number, parse_error })?;
+                    let size_y = pieces.next()
+                        .ok_or(ParseError::MissingPuzzleSizeY { line_number })?
+                        .parse().map_err(|parse_error| ParseError::InvalidPuzzleSizeY { line_number, parse_error })?;
+                    let mut tiles = vec![Tile::Empty; size_x * size_y];
+
+                    for y in (0..size_y).rev() {
+                        let (line_number, line) = lines.next()
+                            .ok_or(ParseError::UnexpectedEndOfPuzzle {
+                                expected_lines: size_y,
+                                found_lines: y,
+                            })?;
+
+                        if line.len() != size_x {
+                            return Err(ParseError::UnevenRows {
                                 line_number,
-                                column_number: x,
-                                character: c,
-                            }),
-                        }?;
-                        tiles[x + y * size_x] = tile;
+                                data_width: size_x,
+                                line_width: line.len(),
+                            });
+                        }
+
+                        for (x, c) in line.chars().enumerate() {
+                            let tile = match c {
+                                ' ' => Ok(Tile::Empty),
+                                '.' => Ok(Tile::Ground),
+                                '#' => Ok(Tile::Grill),
+                                _ => Err(ParseError::UnexpectedCharacter {
+                                    line_number,
+                                    column_number: x,
+                                    character: c,
+                                }),
+                            }?;
+                            tiles[x + y * size_x] = tile;
+                        }
                     }
-                }
 
-                puzzle = Some((Vec2::new(size_x as i32, size_y as i32), tiles));
-            },
-            "start" => {
-                if start.is_some() {
-                    return Err(ParseError::StartAlreadyDefined { line_number });
-                }
+                    puzzle = Some((Vec2::new(size_x as i32, size_y as i32), tiles));
+                },
+                "start" => {
+                    if start.is_some() {
+                        return Err(ParseError::StartAlreadyDefined { line_number });
+                    }
 
-                let start_x = pieces.next()
-                    .ok_or(ParseError::MissingStartX { line_number })?
-                    .parse().map_err(|parse_error| ParseError::InvalidStartX { line_number, parse_error })?;
-                let start_y = pieces.next()
-                    .ok_or(ParseError::MissingStartY { line_number })?
-                    .parse().map_err(|parse_error| ParseError::InvalidStartY { line_number, parse_error })?;
-                let orientation = pieces.next()
-                    .ok_or(ParseError::MissingStartOrientation { line_number })?
-                    .parse().map_err(|parse_error| ParseError::InvalidStartOrientation { line_number, parse_error })?;
-
-                start = Some((Vec2::new(start_x, start_y), orientation));
-            },
-            "sausages" => {
-                if sausages.is_some() {
-                    return Err(ParseError::SausagesAlreadyDefined { line_number });
-                }
-
-                let size = pieces.next()
-                    .ok_or(ParseError::MissingSausagesCount { line_number })?
-                    .parse().map_err(|parse_error| ParseError::InvalidSausagesCount { line_number, parse_error })?;
-
-                let mut read_sausages = SmallVec::with_capacity(size);
-                for i in 0..size {
-                    let (line_number, line) = lines.next()
-                        .ok_or(ParseError::UnexpectedEndOfSausages {
-                            expected_lines: size,
-                            found_lines: i,
-                        })?;
-
-                    let mut pieces = line.split(' ');
-                    let x = pieces.next()
-                        .ok_or(ParseError::MissingSausageX { line_number })?
-                        .parse().map_err(|parse_error| ParseError::InvalidSausageX { line_number, parse_error })?;
-                    let y = pieces.next()
-                        .ok_or(ParseError::MissingSausageY { line_number })?
-                        .parse().map_err(|parse_error| ParseError::InvalidSausageY { line_number, parse_error })?;
+                    let start_x = pieces.next()
+                        .ok_or(ParseError::MissingStartX { line_number })?
+                        .parse().map_err(|parse_error| ParseError::InvalidStartX { line_number, parse_error })?;
+                    let start_y = pieces.next()
+                        .ok_or(ParseError::MissingStartY { line_number })?
+                        .parse().map_err(|parse_error| ParseError::InvalidStartY { line_number, parse_error })?;
                     let orientation = pieces.next()
-                        .ok_or(ParseError::MissingSausageOrientation { line_number })?
-                        .parse().map_err(|parse_error| ParseError::InvalidSausageOrientation { line_number, parse_error })?;
+                        .ok_or(ParseError::MissingStartOrientation { line_number })?
+                        .parse().map_err(|parse_error| ParseError::InvalidStartOrientation { line_number, parse_error })?;
 
-                    read_sausages.push(Sausage::new(Vec2::new(x, y), orientation));
-                }
+                    start = Some((Vec2::new(start_x, start_y), orientation));
+                },
+                "sausages" => {
+                    if sausages.is_some() {
+                        return Err(ParseError::SausagesAlreadyDefined { line_number });
+                    }
 
-                sausages = Some(read_sausages);
-            },
-            command => return Err(ParseError::InvalidCommand { line_number, command: command.to_string() }),
+                    let size = pieces.next()
+                        .ok_or(ParseError::MissingSausagesCount { line_number })?
+                        .parse().map_err(|parse_error| ParseError::InvalidSausagesCount { line_number, parse_error })?;
+
+                    let mut read_sausages = SmallVec::with_capacity(size);
+                    for i in 0..size {
+                        let (line_number, line) = lines.next()
+                            .ok_or(ParseError::UnexpectedEndOfSausages {
+                                expected_lines: size,
+                                found_lines: i,
+                            })?;
+
+                        let mut pieces = line.split(' ');
+                        let x = pieces.next()
+                            .ok_or(ParseError::MissingSausageX { line_number })?
+                            .parse().map_err(|parse_error| ParseError::InvalidSausageX { line_number, parse_error })?;
+                        let y = pieces.next()
+                            .ok_or(ParseError::MissingSausageY { line_number })?
+                            .parse().map_err(|parse_error| ParseError::InvalidSausageY { line_number, parse_error })?;
+                        let orientation = pieces.next()
+                            .ok_or(ParseError::MissingSausageOrientation { line_number })?
+                            .parse().map_err(|parse_error| ParseError::InvalidSausageOrientation { line_number, parse_error })?;
+
+                        read_sausages.push(Sausage::new(Vec2::new(x, y), orientation));
+                    }
+
+                    sausages = Some(read_sausages);
+                },
+                command => return Err(ParseError::InvalidCommand { line_number, command: command.to_string() }),
+            }
         }
+
+        let (size, tiles) = puzzle.ok_or(ParseError::MissingPuzzle)?;
+        let (goal_position, goal_orientation) = start.ok_or(ParseError::MissingStart)?;
+        let sausages = sausages.ok_or(ParseError::MissingSausages)?;
+
+        let data = Data {
+            size,
+            tiles,
+            goal_position,
+            goal_orientation,
+        };
+
+        Ok((State::initial(&data, sausages), data))
     }
 
-    let (size, tiles) = puzzle.ok_or(ParseError::MissingPuzzle)?;
-    let (goal_position, goal_orientation) = start.ok_or(ParseError::MissingStart)?;
-    let sausages = sausages.ok_or(ParseError::MissingSausages)?;
+    fn display(&self, data: &Self::Data, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let board_width = data.size().x + 2;
+        let board_height = data.size().y + 2;
+        let size = board_width * board_height;
+        let mut board = vec![' '; size as usize];
 
-    let data = Data {
-        size,
-        tiles,
-        goal_position,
-        goal_orientation,
-    };
+        for y in 0..board_height {
+            for x in 0..board_width {
+                let index = x + y * board_width;
+                board[index as usize] = match data.tile(Vec2::new(x - 1, y - 1)) {
+                    Tile::Empty => ' ',
+                    Tile::Ground => '.',
+                    Tile::Grill => '#',
+                }
+            }
+        }
 
-    Ok((State::initial(&data, sausages), data))
+        for sausage in self.sausages.iter() {
+            let index = (sausage.position.x + 1) + (sausage.position.y + 1) * board_width;
+            board[index as usize] = 'S';
+            let end_position = sausage.end_position();
+            let index = (end_position.x + 1) + (end_position.y + 1) * board_width;
+            board[index as usize] = 's';
+        }
+
+        let index = (self.player.position.x + 1) + (self.player.position.y + 1) * board_width;
+        board[index as usize] = 'P';
+        let fork_position = self.player.fork_position();
+        let index = (fork_position.x + 1) + (fork_position.y + 1) * board_width;
+        board[index as usize] = 'F';
+
+        for y in (0..board_height).rev() {
+            let begin = y * board_width;
+            let end = (y + 1) * board_width;
+            for c in &board[begin as usize..end as usize] {
+                write!(f, "{}", c)?;
+            }
+            writeln!(f)?;
+        }
+
+        Ok(())
+    }
 }
 
 fn main() {
-    if let Some(path) = env::args().nth(1) {
-        let contents = fs::read_to_string(path)
-            .expect("Unable to read file");
-
-        let (initial_state, data) = parse(contents.as_str()).expect("Failed to parse puzzle");
-        println!("{:?}", brutalize::solve(initial_state.clone(), &data));
-    } else {
-        panic!("Usage: ./sausage_solver <path>");
-    }
+    brutalize_cli::execute::<State>();
 }

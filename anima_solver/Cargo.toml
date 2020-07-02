@@ -6,5 +6,6 @@ edition = "2018"
 
 [dependencies]
 brutalize = { path = "../brutalize" }
+brutalize_cli = { path = "../brutalize_cli" }
 smallvec = "1.4"
 solver_common = { path = "../solver_common" }
