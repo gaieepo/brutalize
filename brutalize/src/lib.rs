@@ -1,6 +1,13 @@
 use std::{
-    cmp::{Ord, Ordering, PartialOrd},
-    collections::{BinaryHeap, HashSet},
+    cmp::{
+        Ord,
+        Ordering,
+        PartialOrd,
+    },
+    collections::{
+        BinaryHeap,
+        HashSet,
+    },
     hash::Hash,
     ops::Add,
 };
@@ -45,11 +52,11 @@ pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action
     let mut parents = Vec::new();
     let mut queue = BinaryHeap::<Node<S>>::new();
 
-    // insert initial state
+    // Insert initial state
     let initial_transitions = initial_state.transitions(data);
     states.insert(initial_state);
 
-    // add transitions from initial state
+    // Add transitions from initial state
     for (action, transition) in initial_transitions {
         match transition {
             Transition::Indeterminate(state) => {
@@ -67,7 +74,7 @@ pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action
         }
     }
 
-    // pop states in priority order until empty
+    // Pop states in priority order until empty
     while let Some(parent_node) = queue.pop() {
         let transitions = parent_node.state.transitions(data);
         if states.insert(parent_node.state) {

@@ -1,10 +1,10 @@
 [package]
-name = "anima_solver"
+name = "sausage_solver"
 version = "0.1.0"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
 
 [dependencies]
 brutalize = { path = "../brutalize" }
-smallvec = "1.4"
 solver_common = { path = "../solver_common" }
+smallvec = "1.4"
