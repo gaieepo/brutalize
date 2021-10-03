@@ -120,8 +120,19 @@ impl brutalize::State for State {
         result
     }
 
-    fn heuristic(&self, _data: &Self::Data) -> Self::Heuristic {
-        0
+    fn heuristic(&self, data: &Self::Data) -> Self::Heuristic {
+        let mut max_distance = 0;
+
+        for goal in data.goals.iter() {
+            let mut min_distance = usize::MAX;
+            for actor in self.actors.iter() {
+                let d = (goal.position - actor.position).abs();
+                min_distance = usize::min(min_distance, (d.x + d.y) as usize);
+            }
+            max_distance = usize::max(max_distance, min_distance);
+        }
+
+        max_distance
     }
 }
 

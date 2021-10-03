@@ -30,6 +30,10 @@ impl Vec2 {
     pub fn new(x: i32, y: i32) -> Vec2 {
         Vec2 { x, y }
     }
+
+    pub fn abs(self) -> Vec2 {
+        Vec2 { x: self.x.abs(), y: self.y.abs() }
+    }
 }
 
 impl Add for Vec2 {
