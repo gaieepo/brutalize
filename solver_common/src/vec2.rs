@@ -1,6 +1,6 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign, Mul, MulAssign};
+use std::ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign};
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Vec2 {
     pub x: i32,
     pub y: i32,

@@ -8,4 +8,4 @@ edition = "2018"
 brutalize = { path = "../brutalize" }
 brutalize_cli = { path = "../brutalize_cli" }
 solver_common = { path = "../solver_common" }
-smallvec = "1.4"
+arrayvec = "0.7"

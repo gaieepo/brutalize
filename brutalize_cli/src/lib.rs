@@ -1,11 +1,4 @@
-use std::{
-    env,
-    fmt,
-    fs,
-    io,
-    path::Path,
-    time::Instant,
-};
+use std::{env, fmt, fs, io, path::Path, time::Instant};
 
 pub trait State: brutalize::State + Clone {
     type ParseError: fmt::Debug;
@@ -51,7 +44,7 @@ where
         }
     }
 
-    if paths.len() == 0 {
+    if paths.is_empty() {
         println!("Usage: {} [-v -q] PATHS", env::args().next().unwrap());
         println!("  -v       Print states along with solutions");
         println!("  -q       Do not print solutions");
@@ -82,7 +75,8 @@ where
     S::Action: fmt::Display + PartialEq,
 {
     let now = Instant::now();
-    let (initial_state, data) = S::parse(&fs::read_to_string(path)?).map_err(|e| SolveError::ParseError(e))?;
+    let (initial_state, data) =
+        S::parse(&fs::read_to_string(path)?).map_err(SolveError::ParseError)?;
     let parse_elapsed = now.elapsed();
 
     let now = Instant::now();
@@ -90,19 +84,33 @@ where
     let solve_elapsed = now.elapsed();
 
     println!("{}:", path.to_str().unwrap());
-    println!("Parse: {}.{:09}s", parse_elapsed.as_secs(), parse_elapsed.subsec_nanos());
-    println!("Solve: {}.{:09}s", solve_elapsed.as_secs(), solve_elapsed.subsec_nanos());
+    println!(
+        "Parse: {}.{:09}s",
+        parse_elapsed.as_secs(),
+        parse_elapsed.subsec_nanos()
+    );
+    println!(
+        "Solve: {}.{:09}s",
+        solve_elapsed.as_secs(),
+        solve_elapsed.subsec_nanos()
+    );
 
     if !settings.quiet {
         if let Some(solution) = result {
             println!("Found solution of length {}:", solution.len());
 
             if settings.verbose {
-                let mut state = initial_state.clone();
+                let mut state = initial_state;
                 for action in solution {
                     println!("{}", DisplayState(&state, &data));
                     println!("{}", action);
-                    if let brutalize::Transition::Indeterminate(s) = state.transitions(&data).into_iter().find(|(a, _)| a == &action).unwrap().1 {
+                    if let brutalize::Transition::Indeterminate(s) = state
+                        .transitions(&data)
+                        .into_iter()
+                        .find(|(a, _)| a == &action)
+                        .unwrap()
+                        .1
+                    {
                         state = s;
                     }
                 }

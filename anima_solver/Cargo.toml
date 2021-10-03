@@ -7,5 +7,12 @@ edition = "2018"
 [dependencies]
 brutalize = { path = "../brutalize" }
 brutalize_cli = { path = "../brutalize_cli" }
-smallvec = "1.4"
+arrayvec = "0.7"
 solver_common = { path = "../solver_common" }
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "bench"
+harness = false

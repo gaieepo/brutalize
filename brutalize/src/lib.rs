@@ -1,13 +1,6 @@
 use std::{
-    cmp::{
-        Ord,
-        Ordering,
-        PartialOrd,
-    },
-    collections::{
-        BinaryHeap,
-        HashSet,
-    },
+    cmp::{Ord, Ordering, PartialOrd},
+    collections::{BinaryHeap, HashSet},
     hash::Hash,
     ops::Add,
 };
@@ -69,7 +62,7 @@ pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action
                     estimate,
                     index: parents.len(),
                 });
-            },
+            }
             Transition::Success => return Some(vec![action]),
         }
     }
@@ -90,7 +83,7 @@ pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action
                             estimate,
                             index: parents.len(),
                         });
-                    },
+                    }
                     Transition::Success => {
                         let mut result_actions = vec![action];
                         let mut current_index = parent_node.index;
@@ -101,7 +94,7 @@ pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action
                         }
                         result_actions.reverse();
                         return Some(result_actions);
-                    },
+                    }
                 }
             }
         }

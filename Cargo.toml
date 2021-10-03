@@ -6,3 +6,6 @@ members = [
     "sausage_solver",
     "solver_common",
 ]
+
+[profile.bench]
+debug = true

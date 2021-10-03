@@ -1,8 +1,5 @@
-use std::{
-    fmt,
-    str::FromStr,
-};
 use crate::vec2::Vec2;
+use std::{fmt, str::FromStr};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Direction {
