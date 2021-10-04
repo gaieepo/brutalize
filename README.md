@@ -25,3 +25,10 @@ Only consider goal-colored actors.
 solve_free_radical      time:   [12.640 ms 12.791 ms 12.953 ms]
 solve_fractal           time:   [10.420 ms 10.486 ms 10.557 ms]
 ```
+
+Don't calculate transitions on previously visited states.
+
+```txt
+solve_free_radical      time:   [8.3712 ms 8.4585 ms 8.5543 ms]
+solve_fractal           time:   [7.1456 ms 7.1885 ms 7.2328 ms]
+```

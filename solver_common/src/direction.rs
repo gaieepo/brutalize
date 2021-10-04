@@ -1,7 +1,7 @@
 use crate::vec2::Vec2;
 use std::{fmt, str::FromStr};
 
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Direction {
     Right,
     Up,
