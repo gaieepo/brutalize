@@ -125,7 +125,7 @@ impl brutalize::State for State {
 
         for goal in data.goals.iter() {
             let mut min_distance = usize::MAX;
-            for actor in self.actors.iter() {
+            for actor in self.actors.iter().filter(|a| a.color == goal.color) {
                 let d = (goal.position - actor.position).abs();
                 min_distance = usize::min(min_distance, (d.x + d.y) as usize);
             }
