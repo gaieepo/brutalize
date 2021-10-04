@@ -1,6 +1,6 @@
 use std::{
     cmp::{Ord, Ordering, PartialOrd},
-    collections::{BinaryHeap, HashSet},
+    collections::{hash_map, BinaryHeap, HashMap},
     hash::Hash,
     ops::Add,
 };
@@ -41,13 +41,13 @@ impl<S: State> Ord for Node<S> {
 }
 
 pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action>> {
-    let mut states = HashSet::new();
+    let mut states = HashMap::new();
     let mut parents = Vec::new();
     let mut queue = BinaryHeap::<Node<S>>::new();
 
     // Insert initial state
     let initial_transitions = initial_state.transitions(data);
-    states.insert(initial_state);
+    states.insert(initial_state, ());
 
     // Add transitions from initial state
     for (action, transition) in initial_transitions {
@@ -69,9 +69,8 @@ pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action
 
     // Pop states in priority order until empty
     while let Some(parent_node) = queue.pop() {
-        let transitions = parent_node.state.transitions(data);
-        if states.insert(parent_node.state) {
-            for (action, transition) in transitions {
+        if let hash_map::Entry::Vacant(vacant) = states.entry(parent_node.state) {
+            for (action, transition) in vacant.key().transitions(data) {
                 match transition {
                     Transition::Indeterminate(state) => {
                         parents.push((parent_node.index, action));
@@ -97,6 +96,7 @@ pub fn solve<S: State>(initial_state: S, data: &S::Data) -> Option<Vec<S::Action
                     }
                 }
             }
+            vacant.insert(());
         }
     }
 
