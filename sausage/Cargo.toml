@@ -1,5 +1,5 @@
 [package]
-name = "sausage_solver"
+name = "sausage"
 version = "0.1.0"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
@@ -9,3 +9,7 @@ brutalize = { path = "../brutalize" }
 brutalize_cli = { path = "../brutalize_cli" }
 solver_common = { path = "../solver_common" }
 arrayvec = "0.7"
+
+[[bin]]
+name = "sausage_solver"
+path = "src/main.rs"

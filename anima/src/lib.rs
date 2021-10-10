@@ -380,3 +380,25 @@ mod tests {
         solve_validate(initial_state, &data, Some(11));
     }
 }
+
+#[cfg(feature = "wasm")]
+const _: () = {
+    use brutalize_cli::State;
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen]
+    pub fn solve(puzzle: &str) -> Option<Vec<i32>> {
+        use crate::State;
+
+        let (initial_state, data) = State::parse(puzzle).unwrap();
+        brutalize::solve::<State>(initial_state, &data)
+            .map(|dirs| dirs.iter().map(|d| {
+                match d {
+                    Direction::Right => 0,
+                    Direction::Up => 1,
+                    Direction::Left => 2,
+                    Direction::Down => 3,
+                }
+            }).collect())
+    }
+};

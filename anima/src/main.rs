@@ -1,4 +1,4 @@
-use anima_solver::State;
+use anima::State;
 
 fn main() {
     brutalize_cli::execute::<State>();

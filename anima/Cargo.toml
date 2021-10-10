@@ -1,5 +1,5 @@
 [package]
-name = "anima_solver"
+name = "anima"
 version = "0.1.0"
 authors = ["David Koloski <djkoloski@gmail.com>"]
 edition = "2018"
@@ -9,10 +9,22 @@ brutalize = { path = "../brutalize" }
 brutalize_cli = { path = "../brutalize_cli" }
 arrayvec = "0.7"
 solver_common = { path = "../solver_common" }
+wasm-bindgen = { version = "0.2", optional = true }
 
 [dev-dependencies]
 criterion = "0.3"
 
+[features]
+default = []
+wasm = ["wasm-bindgen"]
+
 [[bench]]
 name = "bench"
 harness = false
+
+[[bin]]
+name = "anima_solver"
+path = "src/main.rs"
+
+[lib]
+crate-type = ["cdylib", "rlib"]

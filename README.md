@@ -32,3 +32,7 @@ Don't calculate transitions on previously visited states.
 solve_free_radical      time:   [8.3712 ms 8.4585 ms 8.5543 ms]
 solve_fractal           time:   [7.1456 ms 7.1885 ms 7.2328 ms]
 ```
+
+## TODO
+
+Multithread

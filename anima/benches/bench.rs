@@ -1,4 +1,4 @@
-use anima_solver::State;
+use anima::State;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 fn solve_free_radical(c: &mut Criterion) {
