@@ -24,10 +24,12 @@ pub struct Data {
 }
 
 impl Data {
+    #[inline]
     fn size(&self) -> Vec2 {
         self.size
     }
 
+    #[inline]
     fn tile(&self, position: Vec2) -> Tile {
         if position.x < 0
             || position.x >= self.size.x
@@ -41,14 +43,17 @@ impl Data {
         }
     }
 
+    #[inline]
     fn goal_position(&self) -> Vec2 {
         self.goal_position
     }
 
+    #[inline]
     fn goal_orientation(&self) -> Direction {
         self.goal_orientation
     }
 
+    #[inline]
     fn status_of(&self, state: &State) -> Status {
         if self.tile(state.player.position) == Tile::Empty {
             return Status::Failed;
@@ -91,6 +96,7 @@ struct Player {
 }
 
 impl Player {
+    #[inline]
     fn fork_position(&self) -> Vec2 {
         self.position + self.orientation.to_vec2()
     }
@@ -132,6 +138,7 @@ struct Sausage {
 }
 
 impl Sausage {
+    #[inline]
     fn new(position: Vec2, orientation: SausageOrientation) -> Sausage {
         Sausage {
             position,
@@ -140,11 +147,13 @@ impl Sausage {
         }
     }
 
+    #[inline]
     fn roll(&mut self) {
         self.cooked.swap(0, 2);
         self.cooked.swap(1, 3);
     }
 
+    #[inline]
     fn end_position(&self) -> Vec2 {
         match self.orientation {
             SausageOrientation::Horizontal => self.position + Direction::Right.to_vec2(),
@@ -152,18 +161,22 @@ impl Sausage {
         }
     }
 
+    #[inline]
     fn overlap(&self, position: Vec2) -> bool {
         (position == self.position) || (position == self.end_position())
     }
 
+    #[inline]
     fn overlap_player(&self, player: &Player) -> bool {
         self.overlap(player.position) || self.overlap(player.fork_position())
     }
 
+    #[inline]
     fn overlap_sausage(&self, sausage: &Sausage) -> bool {
         self.overlap(sausage.position) || self.overlap(sausage.end_position())
     }
 
+    #[inline]
     fn cook(&mut self, index: usize) {
         self.cooked[index] = match self.cooked[index] {
             Cooked::Uncooked => Cooked::Cooked,
@@ -171,6 +184,7 @@ impl Sausage {
         };
     }
 
+    #[inline]
     fn push(&mut self, direction: Direction, data: &Data) {
         self.position += direction.to_vec2();
         let rolled = match self.orientation {
@@ -203,6 +217,7 @@ pub struct State {
 }
 
 impl State {
+    #[inline]
     fn initial(data: &Data, sausages: ArrayVec<Sausage, 4>) -> State {
         let mut result = State {
             player: Player {
@@ -216,6 +231,7 @@ impl State {
         result
     }
 
+    #[inline]
     fn push_sausage(&mut self, sausage_index: usize, direction: Direction, data: &Data) {
         self.sausages[sausage_index].push(direction, data);
 
@@ -227,10 +243,11 @@ impl State {
         }
     }
 
+    #[inline]
     fn transition(&self, data: &Data, direction: &Direction) -> State {
         let mut result = self.clone();
 
-        match direction {
+        match direction.relative_to(self.player.orientation) {
             Direction::Up => {
                 // Move player
                 result.player.position += result.player.orientation.to_vec2();
@@ -343,9 +360,8 @@ impl brutalize::State for State {
     }
 
     fn heuristic(&self, data: &Self::Data) -> Self::Heuristic {
-        let distance = (self.player.position.x - data.goal_position.x).abs()
-            + (self.player.position.y - data.goal_position.y).abs();
-        distance as usize
+        let distance = (self.player.position - data.goal_position).abs();
+        distance.x as usize + distance.y as usize
     }
 }
 

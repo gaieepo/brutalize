@@ -1,0 +1,9 @@
+puzzle 4 4
+....
+..#.
+.#..
+....
+start 1 0 right
+sausages 2
+0 2 horizontal
+3 2 vertical

@@ -1,0 +1,10 @@
+puzzle 6 6
+ .....
+..   .
+.  # .
+. #  .
+.   ..
+..... 
+start 0 1 down
+sausages 1
+2 5 horizontal

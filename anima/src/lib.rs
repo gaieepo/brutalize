@@ -97,7 +97,7 @@ impl State {
 impl brutalize::State for State {
     type Data = Data;
     type Action = Direction;
-    type Transitions = ArrayVec<(Self::Action, brutalize::Transition<Self>), 4>;
+    type Transitions = [(Self::Action, brutalize::Transition<Self>); 4];
     type Heuristic = usize;
 
     fn transitions(&self, data: &Self::Data) -> Self::Transitions {
@@ -117,7 +117,7 @@ impl brutalize::State for State {
                 result.push((*direction, brutalize::Transition::Indeterminate(state)));
             }
         }
-        result
+        unsafe { result.into_inner_unchecked() }
     }
 
     fn heuristic(&self, data: &Self::Data) -> Self::Heuristic {

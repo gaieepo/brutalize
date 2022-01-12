@@ -1,0 +1,9 @@
+puzzle 4 4
+....
+...#
+#...
+....
+start 0 2 up
+sausages 2
+1 0 vertical
+2 2 vertical

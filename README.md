@@ -35,4 +35,4 @@ solve_fractal           time:   [7.1456 ms 7.1885 ms 7.2328 ms]
 
 ## TODO
 
-Multithread
+Symmetric state reduction, multithread

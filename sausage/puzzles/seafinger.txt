@@ -1,0 +1,10 @@
+puzzle 5 5
+.##  
+.##..
+.##  
+   ..
+   ..
+start 4 1 up
+sausages 2
+3 0 vertical
+3 3 vertical
