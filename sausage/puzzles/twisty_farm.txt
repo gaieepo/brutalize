@@ -1,0 +1,19 @@
+puzzle 10 14
+       XX 
+      X.##
+     X..##
+    X.... 
+X.....  # 
+X....   ##
+X..       
+ X..      
+  X..     
+   X..... 
+  ....  . 
+  .... X. 
+  ....  . 
+     .... 
+start 2 3 right
+sausages 2
+3 1 horizontal
+5 2 vertical

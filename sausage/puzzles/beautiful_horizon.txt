@@ -1,0 +1,10 @@
+puzzle 8 5
+   ....#
+  X..X.#
+ ......#
+X......#
+  X     
+start 5 1 right
+sausages 2
+1 1 vertical
+2 1 vertical

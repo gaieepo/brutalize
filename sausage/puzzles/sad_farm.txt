@@ -1,0 +1,13 @@
+puzzle 11 9
+   XXXXX   
+...X...X   
+...X...X   
+...X.X.X   
+.....X.X   
+.....X.XXXX
+...X.....##
+...X.....##
+...XXXX    
+start 0 0 up
+sausages 1
+1 3 vertical

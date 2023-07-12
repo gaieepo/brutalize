@@ -1,0 +1,10 @@
+puzzle 9 5
+........ 
+........ 
+....X.XXX
+.......#X
+.......#X
+start 2 3 right
+sausages 2
+1 0 vertical
+2 0 vertical

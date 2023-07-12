@@ -3,7 +3,6 @@ members = [
     "anima",
     "brutalize",
     "brutalize_cli",
-    "polycube",
     "sausage",
     "solver_common",
 ]

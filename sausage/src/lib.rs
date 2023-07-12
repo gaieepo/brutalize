@@ -7,6 +7,7 @@ enum Tile {
     Empty,
     Ground,
     Grill,
+    Wall,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -61,7 +62,8 @@ impl Data {
 
         let mut solved = true;
         for sausage in state.sausages.iter() {
-            if self.tile(sausage.position) == Tile::Empty
+            if !sausage.overlap(state.player.fork_position())
+                && self.tile(sausage.position) == Tile::Empty
                 && self.tile(sausage.end_position()) == Tile::Empty
             {
                 return Status::Failed;
@@ -154,21 +156,21 @@ impl Sausage {
     }
 
     #[inline]
-    fn end_position(&self) -> Vec2 {
+    fn end_offset(&self) -> Vec2 {
         match self.orientation {
-            SausageOrientation::Horizontal => self.position + Direction::Right.to_vec2(),
-            SausageOrientation::Vertical => self.position + Direction::Up.to_vec2(),
+            SausageOrientation::Horizontal => Direction::Right.to_vec2(),
+            SausageOrientation::Vertical => Direction::Up.to_vec2(),
         }
+    }
+
+    #[inline]
+    fn end_position(&self) -> Vec2 {
+        self.position + self.end_offset()
     }
 
     #[inline]
     fn overlap(&self, position: Vec2) -> bool {
         (position == self.position) || (position == self.end_position())
-    }
-
-    #[inline]
-    fn overlap_player(&self, player: &Player) -> bool {
-        self.overlap(player.position) || self.overlap(player.fork_position())
     }
 
     #[inline]
@@ -185,28 +187,34 @@ impl Sausage {
     }
 
     #[inline]
-    fn push(&mut self, direction: Direction, data: &Data) {
+    fn push(&mut self, direction: Direction, data: &Data, can_roll: bool) {
         self.position += direction.to_vec2();
-        let rolled = match self.orientation {
-            SausageOrientation::Horizontal => {
-                direction == Direction::Up || direction == Direction::Down
-            }
-            SausageOrientation::Vertical => {
-                direction == Direction::Left || direction == Direction::Right
-            }
-        };
+        if can_roll {
+            let rolled = match self.orientation {
+                SausageOrientation::Horizontal => {
+                    direction == Direction::Up || direction == Direction::Down
+                }
+                SausageOrientation::Vertical => {
+                    direction == Direction::Left || direction == Direction::Right
+                }
+            };
 
-        if rolled {
-            self.roll();
+            if rolled {
+                self.roll();
+            }
         }
 
-        let end_position = self.end_position();
         if data.tile(self.position) == Tile::Grill {
             self.cook(2);
         }
-        if data.tile(end_position) == Tile::Grill {
+        if data.tile(self.end_position()) == Tile::Grill {
             self.cook(3);
         }
+    }
+
+    #[inline]
+    fn is_in_wall(&self, data: &Data) -> bool {
+        data.tile(self.position) == Tile::Wall || data.tile(self.end_position()) == Tile::Wall
     }
 }
 
@@ -232,102 +240,164 @@ impl State {
     }
 
     #[inline]
-    fn push_sausage(&mut self, sausage_index: usize, direction: Direction, data: &Data) {
-        self.sausages[sausage_index].push(direction, data);
+    fn try_move_sausage(&mut self, sausage_index: usize, direction: Direction, data: &Data, can_roll: bool) -> bool {
+        self.sausages[sausage_index].push(direction, data, can_roll);
+        if self.sausages[sausage_index].is_in_wall(data) {
+            return false;
+        }
 
-        for i in 0..self.sausages.len() {
-            if i != sausage_index && self.sausages[sausage_index].overlap_sausage(&self.sausages[i])
-            {
-                self.push_sausage(i, direction, data);
+        for i in (0..self.sausages.len()).filter(|&i| i != sausage_index) {
+            if self.sausages[sausage_index].overlap_sausage(&self.sausages[i]) {
+                if !self.try_move_sausage(i, direction, data, true) {
+                    return false;
+                }
             }
         }
+
+        true
     }
 
     #[inline]
-    fn transition(&self, data: &Data, direction: &Direction) -> State {
+    fn try_strafe_player(&mut self, data: &Data, direction: Direction) -> bool {
+        let old_fork_position = self.player.fork_position();
+
+        // Move player
+        let forward = direction.to_vec2();
+        self.player.position += forward;
+
+        // No invalid moves
+        let player_in_wall = data.tile(self.player.position) == Tile::Wall;
+        let fork_in_wall = data.tile(self.player.fork_position()) == Tile::Wall;
+        if player_in_wall || fork_in_wall {
+            return false;
+        }
+
+        // Push sausages
+        let mut impaled = None;
+        for i in 0..self.sausages.len() {
+            if self.sausages[i].overlap(old_fork_position) {
+                // Impaled sausages always move with the player
+                let original_sausages = self.sausages.clone();
+                if !self.try_move_sausage(i, direction, data, false) {
+                     if direction != self.player.orientation.reverse() {
+                        // If the player isn't moving backwards and the impaled
+                        // sausage cannot move, then the move cannot be done.
+                        return false;
+                    } else {
+                        // If the player is moving backwards and the impaled
+                        // sausage cannot move, then the impaled sausage does
+                        // not move.
+                        self.sausages = original_sausages;
+                        impaled = None;
+                    }
+                } else {
+                    impaled = Some(i);
+                }
+            } else if self.sausages[i].overlap(self.player.position) {
+                if !self.try_move_sausage(i, direction, data, true) {
+                    // If the player cannot push a sausage out of the way, then
+                    // the move cannot be done.
+                    return false;
+                }
+            } else if self.sausages[i].overlap(self.player.fork_position()) {
+                let original_sausages = self.sausages.clone();
+                if !self.try_move_sausage(i, direction, data, true) {
+                    if direction != self.player.orientation {
+                        // If the fork isn't moving forward and cannot push a
+                        // sausage out of the way, then the move cannot be done.
+                        return false;
+                    } else {
+                        // If the fork is moving forward and cannot push a
+                        // sausage out of the way, then the sausages don't move
+                        // and the fork impales a sausage.
+                        self.sausages = original_sausages;
+                        impaled = Some(i);
+                    }
+                }
+            }
+        }
+
+        // Get burned
+        if data.tile(self.player.position) == Tile::Grill {
+            self.player.position -= forward;
+            if let Some(impaled) = impaled {
+                let original_sausages = self.sausages.clone();
+                if !self.try_move_sausage(impaled, direction.reverse(), data, false) {
+                    // If the impaled sausage can't move back with us, then it
+                    // does not move.
+                    self.sausages = original_sausages;
+                }
+            }
+        }
+
+        true
+    }
+
+    #[inline]
+    fn try_rotate_player(&mut self, data: &Data, direction: Direction) -> bool {
+        // Rotate player
+        let original_orientation = self.player.orientation;
+        self.player.orientation = direction;
+
+        let mid = self.player.fork_position();
+        let top = mid + original_orientation.to_vec2();
+
+        // No invalid moves
+        if data.tile(top) == Tile::Wall {
+            return false;
+        }
+
+        // Push top sausages
+        if let Some(i) = self.sausages.iter().position(|sausage| sausage.overlap(top)) {
+            let direction = self.player.orientation;
+            if !self.try_move_sausage(i, direction, data, true) {
+                // If the top sausage can't be moved then the move cannot be
+                // done.
+                return false;
+            }
+        }
+
+        // If the mid tile is a wall then we can't do a full turn but we can do
+        // a half turn.
+        if data.tile(mid) == Tile::Wall {
+            self.player.orientation = original_orientation;
+            return true;
+        }
+
+        // Push mid sausages
+        if let Some(i) = self.sausages.iter().position(|sausage| sausage.overlap(mid)) {
+            let original_sausages = self.sausages.clone();
+            let direction = original_orientation.reverse();
+            if !self.try_move_sausage(i, direction, data, true) {
+                // If the mid sausage can't be moved then the top sausage move
+                // still happens and the player unrotates.
+                self.player.orientation = original_orientation;
+                self.sausages = original_sausages;
+            }
+        }
+
+        true
+    }
+
+    #[inline]
+    fn transition(&self, data: &Data, direction: Direction) -> Option<State> {
         let mut result = self.clone();
 
-        match direction.relative_to(self.player.orientation) {
-            Direction::Up => {
-                // Move player
-                result.player.position += result.player.orientation.to_vec2();
-
-                // Push sausages
-                for i in 0..result.sausages.len() {
-                    if result.sausages[i].overlap_player(&result.player) {
-                        let direction = result.player.orientation;
-                        result.push_sausage(i, direction, data);
-                    }
-                }
-
-                // Get burned
-                if data.tile(result.player.position) == Tile::Grill {
-                    result.player.position -= result.player.orientation.to_vec2();
-                }
+        let is_impaled = self.sausages.iter().any(|s| s.overlap(self.player.fork_position()));
+        let moving_forward = direction == self.player.orientation;
+        let moving_backward = direction == self.player.orientation.reverse();
+        if is_impaled || moving_forward || moving_backward {
+            if !result.try_strafe_player(data, direction) {
+                return None;
             }
-            Direction::Down => {
-                // Move player
-                result.player.position -= result.player.orientation.to_vec2();
-
-                // Push sausages
-                for i in 0..result.sausages.len() {
-                    if result.sausages[i].overlap_player(&result.player) {
-                        let direction = result.player.orientation.reverse();
-                        result.push_sausage(i, direction, data);
-                    }
-                }
-
-                // Get burned
-                if data.tile(result.player.position) == Tile::Grill {
-                    result.player.position += result.player.orientation.to_vec2();
-                }
-            }
-            Direction::Left => {
-                // Rotate player
-                let from_orientation = result.player.orientation;
-                result.player.orientation = from_orientation.rotate_ccw();
-
-                let top = result.player.position
-                    + result.player.orientation.to_vec2()
-                    + from_orientation.to_vec2();
-                let mid = result.player.position + result.player.orientation.to_vec2();
-
-                // Push sausages
-                for i in 0..result.sausages.len() {
-                    if result.sausages[i].overlap(top) {
-                        let direction = result.player.orientation;
-                        result.push_sausage(i, direction, data);
-                    } else if result.sausages[i].overlap(mid) {
-                        let direction = result.player.orientation.rotate_ccw();
-                        result.push_sausage(i, direction, data);
-                    }
-                }
-            }
-            Direction::Right => {
-                // Rotate player
-                let from_orientation = result.player.orientation;
-                result.player.orientation = from_orientation.rotate_cw();
-
-                let top = result.player.position
-                    + result.player.orientation.to_vec2()
-                    + from_orientation.to_vec2();
-                let mid = result.player.position + result.player.orientation.to_vec2();
-
-                // Push sausages
-                for i in 0..result.sausages.len() {
-                    if result.sausages[i].overlap(top) {
-                        let direction = result.player.orientation;
-                        result.push_sausage(i, direction, data);
-                    } else if result.sausages[i].overlap(mid) {
-                        let direction = result.player.orientation.rotate_cw();
-                        result.push_sausage(i, direction, data);
-                    }
-                }
+        } else {
+            if !result.try_rotate_player(data, direction) {
+                return None;
             }
         }
 
         result.sausages.sort_unstable();
-        result
+        Some(result)
     }
 }
 
@@ -346,14 +416,16 @@ impl brutalize::State for State {
             Direction::Down,
         ]
         .iter()
+        .cloned()
         {
-            let state = self.transition(data, direction);
-            match data.status_of(&state) {
-                Status::Solved => result.push((*direction, brutalize::Transition::Success)),
-                Status::Unsolved => {
-                    result.push((*direction, brutalize::Transition::Indeterminate(state)))
+            if let Some(state) = self.transition(data, direction) {
+                match data.status_of(&state) {
+                    Status::Solved => result.push((direction, brutalize::Transition::Success)),
+                    Status::Unsolved => {
+                        result.push((direction, brutalize::Transition::Indeterminate(state)))
+                    }
+                    Status::Failed => (),
                 }
-                Status::Failed => (),
             }
         }
         result
@@ -527,6 +599,7 @@ impl brutalize_cli::State for State {
                                 ' ' => Ok(Tile::Empty),
                                 '.' => Ok(Tile::Ground),
                                 '#' => Ok(Tile::Grill),
+                                'X' => Ok(Tile::Wall),
                                 _ => Err(ParseError::UnexpectedCharacter {
                                     line_number,
                                     column_number: x,
@@ -660,6 +733,7 @@ impl brutalize_cli::State for State {
                     Tile::Empty => ' ',
                     Tile::Ground => '.',
                     Tile::Grill => '#',
+                    Tile::Wall => 'X',
                 }
             }
         }
@@ -688,5 +762,137 @@ impl brutalize_cli::State for State {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use brutalize_cli::State as _;
+    use solver_common::{Direction, Vec2};
+    use crate::{State, Sausage, SausageOrientation, Cooked, Player};
+
+    macro_rules! lines {
+        ($($line:expr)*) => {
+            concat!(
+                $($line, "\n",)*
+            )
+        }
+    }
+
+    macro_rules! arrayvec {
+        ($($el:expr),* $(,)?) => {{
+            let mut result = arrayvec::ArrayVec::new();
+            $(result.push($el);)*
+            result
+        }}
+    }
+
+    #[test]
+    fn strafe_roll_two() {
+        const PUZZLE: &'static str = lines![
+            "puzzle 5 5"
+            "....."
+            "....."
+            "....."
+            "....."
+            "....."
+            "start 0 0 right"
+            "sausages 2"
+            "2 0 vertical"
+            "3 1 vertical"
+        ];
+
+        let (state, data) = State::parse(PUZZLE).unwrap();
+        assert_eq!(
+            state.transition(&data, Direction::Right),
+            Some(State {
+                player: Player {
+                    position: Vec2::new(1, 0),
+                    orientation: Direction::Right,
+                },
+                sausages: arrayvec![
+                    Sausage {
+                        position: Vec2::new(3, 0),
+                        orientation: SausageOrientation::Vertical,
+                        cooked: [Cooked::Uncooked; 4],
+                    },
+                    Sausage {
+                        position: Vec2::new(4, 1),
+                        orientation: SausageOrientation::Vertical,
+                        cooked: [Cooked::Uncooked; 4],
+                    },
+                ],
+            })
+        )
+    }
+
+    #[test]
+    fn turn_roll_two() {
+        const PUZZLE: &'static str = lines![
+            "puzzle 5 5"
+            "....."
+            "....."
+            "....."
+            "....."
+            "....."
+            "start 0 1 up"
+            "sausages 2"
+            "1 2 vertical"
+            "1 1 horizontal"
+        ];
+
+        let (state, data) = State::parse(PUZZLE).unwrap();
+        assert_eq!(
+            state.transition(&data, Direction::Right),
+            Some(State {
+                player: Player {
+                    position: Vec2::new(0, 1),
+                    orientation: Direction::Right,
+                },
+                sausages: arrayvec![
+                    Sausage {
+                        position: Vec2::new(1, 0),
+                        orientation: SausageOrientation::Horizontal,
+                        cooked: [Cooked::Uncooked; 4],
+                    },
+                    Sausage {
+                        position: Vec2::new(2, 2),
+                        orientation: SausageOrientation::Vertical,
+                        cooked: [Cooked::Uncooked; 4],
+                    },
+                ],
+            })
+        )
+    }
+
+    #[test]
+    fn half_turn_roll() {
+        const PUZZLE: &'static str = lines![
+            "puzzle 3 3"
+            "..."
+            "..."
+            ".X."
+            "start 0 0 up"
+            "sausages 1"
+            "1 1 vertical"
+        ];
+
+        let (state, data) = State::parse(PUZZLE).unwrap();
+        assert_eq!(
+            state.transition(&data, Direction::Right),
+            Some(State {
+                player: Player {
+                    position: Vec2::new(0, 0),
+                    orientation: Direction::Up,
+                },
+                sausages: arrayvec![
+                    Sausage {
+                        position: Vec2::new(2, 1),
+                        orientation: SausageOrientation::Vertical,
+                        cooked: [Cooked::Uncooked; 4],
+                    },
+                ],
+            })
+        )
     }
 }

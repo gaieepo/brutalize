@@ -1,0 +1,8 @@
+puzzle 7 4
+..#XX..
+. #.X..
+.......
+  ...  
+start 3 1 right
+sausages 1
+1 2 vertical

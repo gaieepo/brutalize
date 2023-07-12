@@ -41,16 +41,6 @@ impl Direction {
     }
 
     #[inline]
-    pub fn relative_to(self, other: Direction) -> Direction {
-        match other {
-            Direction::Right => self.rotate_ccw(),
-            Direction::Up => self,
-            Direction::Left => self.rotate_cw(),
-            Direction::Down => self.reverse(),
-        }
-    }
-
-    #[inline]
     pub fn to_vec2(self) -> Vec2 {
         match self {
             Direction::Right => Vec2::right(),
