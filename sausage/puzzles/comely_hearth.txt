@@ -1,10 +1,10 @@
-puzzle 5 5
+puzzle 5 5 1
   ...
 .... 
 ..#..
 .##. 
 ...  
-start 2 3 left
+start 2 3 0 left
 sausages 2
-0 2 horizontal
-3 2 horizontal
+0 2 0 horizontal
+3 2 0 horizontal

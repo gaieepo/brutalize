@@ -1,11 +1,11 @@
-puzzle 10 6
+puzzle 10 6 1
  XX....XXX
 X.#....#.X
 X.#....#.X
 XXX....XXX
  ........ 
  ........ 
-start 5 2 down
+start 5 2 0 down
 sausages 2
-4 3 horizontal
-4 4 horizontal
+4 3 0 horizontal
+4 4 0 horizontal

@@ -1,8 +1,8 @@
-puzzle 7 4
+puzzle 7 4 1
 ..#XX..
 . #.X..
 .......
   ...  
-start 3 1 right
+start 3 1 0 right
 sausages 1
-1 2 vertical
+1 2 0 vertical

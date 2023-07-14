@@ -1,9 +1,9 @@
-puzzle 5 4
+puzzle 5 4 1
 .....
 .#..#
 .#..#
 .....
-start 0 1 up
+start 0 1 0 up
 sausages 2
-2 1 vertical
-3 1 vertical
+2 1 0 vertical
+3 1 0 vertical

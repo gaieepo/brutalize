@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
-use solver_common::{Direction, ParseDirectionError, Vec2};
-use std::{fmt, num::ParseIntError, str::FromStr};
+use solver_common::{Direction, ParseDirectionError, Vec3};
+use std::{fmt, num::ParseIntError, str::FromStr, collections::HashMap};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 enum Tile {
@@ -18,34 +18,37 @@ enum Status {
 }
 
 pub struct Data {
-    size: Vec2,
+    size: Vec3,
     tiles: Vec<Tile>,
-    goal_position: Vec2,
+    ladders: HashMap<(Vec3, Direction), i32>,
+    goal_position: Vec3,
     goal_orientation: Direction,
 }
 
 impl Data {
     #[inline]
-    fn size(&self) -> Vec2 {
+    fn size(&self) -> Vec3 {
         self.size
     }
 
     #[inline]
-    fn tile(&self, position: Vec2) -> Tile {
+    fn tile(&self, position: Vec3) -> Tile {
         if position.x < 0
             || position.x >= self.size.x
             || position.y < 0
             || position.y >= self.size.y
+            || position.z < 0
+            || position.z >= self.size.z
         {
             Tile::Empty
         } else {
-            let index = position.x + position.y * self.size.x;
+            let index = position.x + self.size.x * (position.y + self.size.y * position.z);
             self.tiles[index as usize]
         }
     }
 
     #[inline]
-    fn goal_position(&self) -> Vec2 {
+    fn goal_position(&self) -> Vec3 {
         self.goal_position
     }
 
@@ -93,14 +96,14 @@ impl Data {
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 struct Player {
-    position: Vec2,
+    position: Vec3,
     orientation: Direction,
 }
 
 impl Player {
     #[inline]
-    fn fork_position(&self) -> Vec2 {
-        self.position + self.orientation.to_vec2()
+    fn fork_position(&self) -> Vec3 {
+        self.position + self.orientation.to_vec3()
     }
 }
 
@@ -134,14 +137,14 @@ enum Cooked {
 
 #[derive(Debug, Clone, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct Sausage {
-    position: Vec2,
+    position: Vec3,
     orientation: SausageOrientation,
     cooked: [Cooked; 4],
 }
 
 impl Sausage {
     #[inline]
-    fn new(position: Vec2, orientation: SausageOrientation) -> Sausage {
+    fn new(position: Vec3, orientation: SausageOrientation) -> Sausage {
         Sausage {
             position,
             orientation,
@@ -156,20 +159,20 @@ impl Sausage {
     }
 
     #[inline]
-    fn end_offset(&self) -> Vec2 {
+    fn end_offset(&self) -> Vec3 {
         match self.orientation {
-            SausageOrientation::Horizontal => Direction::Right.to_vec2(),
-            SausageOrientation::Vertical => Direction::Up.to_vec2(),
+            SausageOrientation::Horizontal => Direction::Right.to_vec3(),
+            SausageOrientation::Vertical => Direction::Up.to_vec3(),
         }
     }
 
     #[inline]
-    fn end_position(&self) -> Vec2 {
+    fn end_position(&self) -> Vec3 {
         self.position + self.end_offset()
     }
 
     #[inline]
-    fn overlap(&self, position: Vec2) -> bool {
+    fn overlap(&self, position: Vec3) -> bool {
         (position == self.position) || (position == self.end_position())
     }
 
@@ -188,7 +191,7 @@ impl Sausage {
 
     #[inline]
     fn push(&mut self, direction: Direction, data: &Data, can_roll: bool) {
-        self.position += direction.to_vec2();
+        self.position += direction.to_vec3();
         if can_roll {
             let rolled = match self.orientation {
                 SausageOrientation::Horizontal => {
@@ -218,15 +221,17 @@ impl Sausage {
     }
 }
 
+const MAX_SAUSAGES: usize = 8;
+
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct State {
     player: Player,
-    sausages: ArrayVec<Sausage, 4>,
+    sausages: ArrayVec<Sausage, MAX_SAUSAGES>,
 }
 
 impl State {
     #[inline]
-    fn initial(data: &Data, sausages: ArrayVec<Sausage, 4>) -> State {
+    fn initial(data: &Data, sausages: ArrayVec<Sausage, MAX_SAUSAGES>) -> State {
         let mut result = State {
             player: Player {
                 position: data.goal_position(),
@@ -245,6 +250,10 @@ impl State {
         if self.sausages[sausage_index].is_in_wall(data) {
             return false;
         }
+        // Roll sausages resting on the moved sausage
+        for i in (0..self.sausages.len()) {
+            if self.sausages[i]
+        }
 
         for i in (0..self.sausages.len()).filter(|&i| i != sausage_index) {
             if self.sausages[sausage_index].overlap_sausage(&self.sausages[i]) {
@@ -262,7 +271,7 @@ impl State {
         let old_fork_position = self.player.fork_position();
 
         // Move player
-        let forward = direction.to_vec2();
+        let forward = direction.to_vec3();
         self.player.position += forward;
 
         // No invalid moves
@@ -334,13 +343,21 @@ impl State {
     }
 
     #[inline]
+    fn try_climb_ladder(&mut self, data: &Data, direction: Direction, to_z: i32) -> bool {
+        self.player.position += direction.to_vec3();
+        self.player.position.z = to_z;
+
+        true
+    }
+
+    #[inline]
     fn try_rotate_player(&mut self, data: &Data, direction: Direction) -> bool {
         // Rotate player
         let original_orientation = self.player.orientation;
         self.player.orientation = direction;
 
         let mid = self.player.fork_position();
-        let top = mid + original_orientation.to_vec2();
+        let top = mid + original_orientation.to_vec3();
 
         // No invalid moves
         if data.tile(top) == Tile::Wall {
@@ -388,6 +405,10 @@ impl State {
         let moving_backward = direction == self.player.orientation.reverse();
         if is_impaled || moving_forward || moving_backward {
             if !result.try_strafe_player(data, direction) {
+                return None;
+            }
+        } else if let Some(&to_z) = data.ladders.get(&(self.player.position, direction)) {
+            if !result.try_climb_ladder(data, direction, to_z) {
                 return None;
             }
         } else {
@@ -463,6 +484,13 @@ pub enum ParseError {
         line_number: usize,
         parse_error: ParseIntError,
     },
+    MissingPuzzleSizeZ {
+        line_number: usize,
+    },
+    InvalidPuzzleSizeZ {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
     UnexpectedEndOfPuzzle {
         expected_lines: usize,
         found_lines: usize,
@@ -494,12 +522,68 @@ pub enum ParseError {
         line_number: usize,
         parse_error: ParseIntError,
     },
+    MissingStartZ {
+        line_number: usize,
+    },
+    InvalidStartZ {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
     MissingStartOrientation {
         line_number: usize,
     },
     InvalidStartOrientation {
         line_number: usize,
         parse_error: ParseDirectionError,
+    },
+    LaddersAlreadyDefined {
+        line_number: usize,
+    },
+    MissingLaddersCount {
+        line_number: usize,
+    },
+    InvalidLaddersCount {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
+    MissingLadderX {
+        line_number: usize,
+    },
+    InvalidLadderX {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
+    MissingLadderY {
+        line_number: usize,
+    },
+    InvalidLadderY {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
+    MissingLadderDirection {
+        line_number: usize,
+    },
+    InvalidLadderDirection {
+        line_number: usize,
+        parse_error: ParseDirectionError,
+    },
+    MissingLadderFromZ {
+        line_number: usize,
+    },
+    InvalidLadderFromZ {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
+    MissingLadderToZ {
+        line_number: usize,
+    },
+    InvalidLadderToZ {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
+    UnexpectedEndOfLadders {
+        expected_lines: usize,
+        found_lines: usize,
     },
     SausagesAlreadyDefined {
         line_number: usize,
@@ -525,6 +609,13 @@ pub enum ParseError {
         line_number: usize,
         parse_error: ParseIntError,
     },
+    MissingSausageZ {
+        line_number: usize,
+    },
+    InvalidSausageZ {
+        line_number: usize,
+        parse_error: ParseIntError,
+    },
     MissingSausageOrientation {
         line_number: usize,
     },
@@ -547,6 +638,7 @@ impl brutalize_cli::State for State {
     fn parse(s: &str) -> Result<(State, Data), ParseError> {
         let mut puzzle = None;
         let mut start = None;
+        let mut ladders = None;
         let mut sausages = None;
 
         let mut lines = s.lines().enumerate();
@@ -577,40 +669,50 @@ impl brutalize_cli::State for State {
                             line_number,
                             parse_error,
                         })?;
-                    let mut tiles = vec![Tile::Empty; size_x * size_y];
+                    let size_z = pieces
+                        .next()
+                        .ok_or(ParseError::MissingPuzzleSizeZ { line_number })?
+                        .parse()
+                        .map_err(|parse_error| ParseError::InvalidPuzzleSizeZ {
+                            line_number,
+                            parse_error,
+                        })?;
+                    let mut tiles = vec![Tile::Empty; size_x * size_y * size_z];
 
-                    for y in (0..size_y).rev() {
-                        let (line_number, line) =
-                            lines.next().ok_or(ParseError::UnexpectedEndOfPuzzle {
-                                expected_lines: size_y,
-                                found_lines: y,
-                            })?;
+                    for z in 0..size_z {
+                        for y in (0..size_y).rev() {
+                            let (line_number, line) =
+                                lines.next().ok_or(ParseError::UnexpectedEndOfPuzzle {
+                                    expected_lines: size_y * size_z,
+                                    found_lines: y,
+                                })?;
 
-                        if line.len() != size_x {
-                            return Err(ParseError::UnevenRows {
-                                line_number,
-                                data_width: size_x,
-                                line_width: line.len(),
-                            });
-                        }
-
-                        for (x, c) in line.chars().enumerate() {
-                            let tile = match c {
-                                ' ' => Ok(Tile::Empty),
-                                '.' => Ok(Tile::Ground),
-                                '#' => Ok(Tile::Grill),
-                                'X' => Ok(Tile::Wall),
-                                _ => Err(ParseError::UnexpectedCharacter {
+                            if line.len() != size_x {
+                                return Err(ParseError::UnevenRows {
                                     line_number,
-                                    column_number: x,
-                                    character: c,
-                                }),
-                            }?;
-                            tiles[x + y * size_x] = tile;
+                                    data_width: size_x,
+                                    line_width: line.len(),
+                                });
+                            }
+
+                            for (x, c) in line.chars().enumerate() {
+                                let tile = match c {
+                                    ' ' => Ok(Tile::Empty),
+                                    '.' => Ok(Tile::Ground),
+                                    '#' => Ok(Tile::Grill),
+                                    'X' => Ok(Tile::Wall),
+                                    _ => Err(ParseError::UnexpectedCharacter {
+                                        line_number,
+                                        column_number: x,
+                                        character: c,
+                                    }),
+                                }?;
+                                tiles[x + size_x * (y + size_y * z)] = tile;
+                            }
                         }
                     }
 
-                    puzzle = Some((Vec2::new(size_x as i32, size_y as i32), tiles));
+                    puzzle = Some((Vec3::new(size_x as i32, size_y as i32, size_z as i32), tiles));
                 }
                 "start" => {
                     if start.is_some() {
@@ -633,6 +735,14 @@ impl brutalize_cli::State for State {
                             line_number,
                             parse_error,
                         })?;
+                    let start_z = pieces
+                        .next()
+                        .ok_or(ParseError::MissingStartZ { line_number })?
+                        .parse()
+                        .map_err(|parse_error| ParseError::InvalidStartZ {
+                            line_number,
+                            parse_error,
+                        })?;
                     let orientation = pieces
                         .next()
                         .ok_or(ParseError::MissingStartOrientation { line_number })?
@@ -642,7 +752,79 @@ impl brutalize_cli::State for State {
                             parse_error,
                         })?;
 
-                    start = Some((Vec2::new(start_x, start_y), orientation));
+                    start = Some((Vec3::new(start_x, start_y, start_z), orientation));
+                }
+                "ladders" => {
+                    if ladders.is_some() {
+                        return Err(ParseError::LaddersAlreadyDefined { line_number });
+                    }
+
+                    let size = pieces
+                        .next()
+                        .ok_or(ParseError::MissingLaddersCount { line_number })?
+                        .parse()
+                        .map_err(|parse_error| ParseError::InvalidLaddersCount {
+                            line_number,
+                            parse_error,
+                        })?;
+
+                    let mut read_ladders = HashMap::new();
+                    for i in 0..size {
+                        let (line_number, line) = lines.next().ok_or(ParseError::UnexpectedEndOfLadders {
+                            expected_lines: size,
+                            found_lines: i,
+                        })?;
+
+                        let mut pieces = line.split(' ');
+
+                        let x = pieces
+                            .next()
+                            .ok_or(ParseError::MissingLadderX { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidLadderX {
+                                line_number,
+                                parse_error,
+                            })?;
+                        let y = pieces
+                            .next()
+                            .ok_or(ParseError::MissingLadderY { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidLadderY {
+                                line_number,
+                                parse_error,
+                            })?;
+                        let from_z = pieces
+                            .next()
+                            .ok_or(ParseError::MissingLadderFromZ { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidLadderFromZ {
+                                line_number,
+                                parse_error,
+                            })?;
+                        let direction = pieces
+                            .next()
+                            .ok_or(ParseError::MissingLadderDirection { line_number })?
+                            .parse::<Direction>()
+                            .map_err(|parse_error| ParseError::InvalidLadderDirection {
+                                line_number,
+                                parse_error,
+                            })?;
+                        let to_z = pieces
+                            .next()
+                            .ok_or(ParseError::MissingLadderToZ { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidLadderToZ {
+                                line_number,
+                                parse_error,
+                            })?;
+
+                        let from = Vec3::new(x, y, from_z);
+                        let to = Vec3::new(x, y, to_z);
+                        read_ladders.insert((from, direction), to_z);
+                        read_ladders.insert((to, direction.reverse()), from_z);
+                    }
+
+                    ladders = Some(read_ladders);
                 }
                 "sausages" => {
                     if sausages.is_some() {
@@ -683,6 +865,14 @@ impl brutalize_cli::State for State {
                                 line_number,
                                 parse_error,
                             })?;
+                        let z = pieces
+                            .next()
+                            .ok_or(ParseError::MissingSausageZ { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidSausageZ {
+                                line_number,
+                                parse_error,
+                            })?;
                         let orientation = pieces
                             .next()
                             .ok_or(ParseError::MissingSausageOrientation { line_number })?
@@ -692,7 +882,7 @@ impl brutalize_cli::State for State {
                                 parse_error,
                             })?;
 
-                        read_sausages.push(Sausage::new(Vec2::new(x, y), orientation));
+                        read_sausages.push(Sausage::new(Vec3::new(x, y, z), orientation));
                     }
 
                     sausages = Some(read_sausages);
@@ -708,11 +898,13 @@ impl brutalize_cli::State for State {
 
         let (size, tiles) = puzzle.ok_or(ParseError::MissingPuzzle)?;
         let (goal_position, goal_orientation) = start.ok_or(ParseError::MissingStart)?;
+        let ladders = ladders.unwrap_or_default();
         let sausages = sausages.ok_or(ParseError::MissingSausages)?;
 
         let data = Data {
             size,
             tiles,
+            ladders,
             goal_position,
             goal_orientation,
         };
@@ -729,7 +921,7 @@ impl brutalize_cli::State for State {
         for y in 0..board_height {
             for x in 0..board_width {
                 let index = x + y * board_width;
-                board[index as usize] = match data.tile(Vec2::new(x - 1, y - 1)) {
+                board[index as usize] = match data.tile(Vec3::new(x - 1, y - 1, 0)) {
                     Tile::Empty => ' ',
                     Tile::Ground => '.',
                     Tile::Grill => '#',
@@ -768,7 +960,7 @@ impl brutalize_cli::State for State {
 #[cfg(test)]
 mod tests {
     use brutalize_cli::State as _;
-    use solver_common::{Direction, Vec2};
+    use solver_common::{Direction, Vec3};
     use crate::{State, Sausage, SausageOrientation, Cooked, Player};
 
     macro_rules! lines {
@@ -807,17 +999,17 @@ mod tests {
             state.transition(&data, Direction::Right),
             Some(State {
                 player: Player {
-                    position: Vec2::new(1, 0),
+                    position: Vec3::new(1, 0, 0),
                     orientation: Direction::Right,
                 },
                 sausages: arrayvec![
                     Sausage {
-                        position: Vec2::new(3, 0),
+                        position: Vec3::new(3, 0, 0),
                         orientation: SausageOrientation::Vertical,
                         cooked: [Cooked::Uncooked; 4],
                     },
                     Sausage {
-                        position: Vec2::new(4, 1),
+                        position: Vec3::new(4, 1, 0),
                         orientation: SausageOrientation::Vertical,
                         cooked: [Cooked::Uncooked; 4],
                     },
@@ -846,17 +1038,17 @@ mod tests {
             state.transition(&data, Direction::Right),
             Some(State {
                 player: Player {
-                    position: Vec2::new(0, 1),
+                    position: Vec3::new(0, 1, 0),
                     orientation: Direction::Right,
                 },
                 sausages: arrayvec![
                     Sausage {
-                        position: Vec2::new(1, 0),
+                        position: Vec3::new(1, 0, 0),
                         orientation: SausageOrientation::Horizontal,
                         cooked: [Cooked::Uncooked; 4],
                     },
                     Sausage {
-                        position: Vec2::new(2, 2),
+                        position: Vec3::new(2, 2, 0),
                         orientation: SausageOrientation::Vertical,
                         cooked: [Cooked::Uncooked; 4],
                     },
@@ -882,12 +1074,12 @@ mod tests {
             state.transition(&data, Direction::Right),
             Some(State {
                 player: Player {
-                    position: Vec2::new(0, 0),
+                    position: Vec3::new(0, 0, 0),
                     orientation: Direction::Up,
                 },
                 sausages: arrayvec![
                     Sausage {
-                        position: Vec2::new(2, 1),
+                        position: Vec3::new(2, 1, 0),
                         orientation: SausageOrientation::Vertical,
                         cooked: [Cooked::Uncooked; 4],
                     },

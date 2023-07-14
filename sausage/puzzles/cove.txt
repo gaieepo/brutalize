@@ -1,11 +1,11 @@
-puzzle 8 6
+puzzle 8 6 1
 ..X..#..
 .....#..
 ........
    .....
     ....
     ....
-start 6 5 down
+start 6 5 0 down
 sausages 2
-5 1 vertical
-6 1 vertical
+5 1 0 vertical
+6 1 0 vertical

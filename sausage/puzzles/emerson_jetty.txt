@@ -1,4 +1,4 @@
-puzzle 19 17
+puzzle 19 17 1
          ...  .    
 ....X..........X X 
 .......X..     ..  
@@ -16,6 +16,6 @@ puzzle 19 17
            ....    
           ##.X.    
           ##...    
-start 10 9 right
+start 10 9 0 right
 sausages 1
-1 12 horizontal
+1 12 0 horizontal

@@ -1,4 +1,4 @@
-puzzle 11 9
+puzzle 11 9 1
    XXXXX   
 ...X...X   
 ...X...X   
@@ -8,6 +8,6 @@ puzzle 11 9
 ...X.....##
 ...X.....##
 ...XXXX    
-start 0 0 up
+start 0 0 0 up
 sausages 1
-1 3 vertical
+1 3 0 vertical

@@ -1,4 +1,4 @@
-use crate::vec2::Vec2;
+use crate::{Vec2, Vec3};
 use std::{fmt, str::FromStr};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -43,10 +43,20 @@ impl Direction {
     #[inline]
     pub fn to_vec2(self) -> Vec2 {
         match self {
-            Direction::Right => Vec2::right(),
-            Direction::Up => Vec2::up(),
-            Direction::Left => Vec2::left(),
-            Direction::Down => Vec2::down(),
+            Direction::Right => Vec2::RIGHT,
+            Direction::Up => Vec2::UP,
+            Direction::Left => Vec2::LEFT,
+            Direction::Down => Vec2::DOWN,
+        }
+    }
+
+    #[inline]
+    pub fn to_vec3(self) -> Vec3 {
+        match self {
+            Direction::Right => Vec3::RIGHT,
+            Direction::Up => Vec3::FORTH,
+            Direction::Left => Vec3::LEFT,
+            Direction::Down => Vec3::BACK,
         }
     }
 }
