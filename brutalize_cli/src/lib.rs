@@ -81,6 +81,11 @@ where
     let now = Instant::now();
     let (initial_state, data) =
         S::parse(&fs::read_to_string(path)?).map_err(SolveError::ParseError)?;
+
+    if !settings.quiet {
+        println!("{}", DisplayState(&initial_state, &data));
+    }
+
     let parse_elapsed = now.elapsed();
 
     let now = Instant::now();
