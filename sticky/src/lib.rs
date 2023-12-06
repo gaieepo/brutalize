@@ -18,7 +18,7 @@ enum Status {
 pub struct Data {
     size: Vec2,
     tiles: Vec<Tile>,
-    goal_position: Vec2,
+    goal_positions: ArrayVec<Vec2, 4>,
 }
 
 impl Data {
@@ -42,8 +42,8 @@ impl Data {
     }
 
     #[inline]
-    fn goal_position(&self) -> Vec2 {
-        self.goal_position
+    fn goal_positions(&self) -> &ArrayVec<Vec2, 4> {
+        &self.goal_positions
     }
 
     #[inline]
@@ -53,8 +53,15 @@ impl Data {
         }
 
         let mut solved = true;
-        if state.chest.position != self.goal_position() {
-            solved = false;
+        for chest in &state.chests {
+            if !self
+                .goal_positions()
+                .iter()
+                .any(|&goal_pos| goal_pos == chest.position)
+            {
+                solved = false;
+                break;
+            }
         }
         if solved {
             Status::Solved
@@ -69,7 +76,7 @@ struct Player {
     position: Vec2,
 }
 
-#[derive(Debug, Clone, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Ord, PartialOrd)]
 struct Chest {
     position: Vec2,
 }
@@ -106,23 +113,25 @@ impl Wall {
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct State {
     player: Player,
-    chest: Chest,
+    chests: ArrayVec<Chest, 4>,
     walls: ArrayVec<Wall, 32>,
 }
 
 impl State {
     #[inline]
-    fn initial(start_position: Vec2, chest_position: Vec2, walls: ArrayVec<Wall, 32>) -> State {
+    fn initial(
+        start_position: Vec2,
+        chests: ArrayVec<Chest, 4>,
+        walls: ArrayVec<Wall, 32>,
+    ) -> State {
         let mut result = State {
             player: Player {
                 position: start_position,
             },
-            chest: Chest {
-                position: chest_position,
-            },
+            chests,
             walls,
         };
-
+        result.chests.sort_unstable();
         result.walls.sort_unstable();
         result
     }
@@ -152,18 +161,28 @@ impl State {
             }
         }
 
-        // Try to push chest
-        if self.chest.overlap(self.player.position) {
-            let behind_chest_position = self.player.position + forward;
-            if data.tile(behind_chest_position) == Tile::Ground
-                && !self
-                    .walls
-                    .iter()
-                    .any(|wall| wall.overlap(behind_chest_position))
-            {
-                self.chest.push(direction);
-            } else {
-                return false;
+        for i in 0..self.chests.len() {
+            // Try to push chest
+            if self.chests[i].overlap(self.player.position) {
+                let behind_chest_position = self.chests[i].position + forward;
+
+                // Check for another chest behind this chest
+                if (0..self.chests.len())
+                    .any(|j| i != j && self.chests[j].position == behind_chest_position)
+                {
+                    return false;
+                }
+
+                if data.tile(behind_chest_position) == Tile::Ground
+                    && !self
+                        .walls
+                        .iter()
+                        .any(|wall| wall.overlap(behind_chest_position))
+                {
+                    self.chests[i].push(direction);
+                } else {
+                    return false;
+                }
             }
         }
 
@@ -214,8 +233,19 @@ impl brutalize::State for State {
     }
 
     fn heuristic(&self, data: &Self::Data) -> Self::Heuristic {
-        let distance = (self.chest.position - data.goal_position).abs();
-        distance.x as usize + distance.y as usize
+        self.chests
+            .iter()
+            .map(|chest| {
+                data.goal_positions
+                    .iter()
+                    .map(|&goal_pos| {
+                        let distance = (chest.position - goal_pos).abs();
+                        distance.x as usize + distance.y as usize
+                    })
+                    .min()
+                    .unwrap_or(usize::MAX)
+            })
+            .sum()
     }
 }
 
@@ -276,8 +306,15 @@ pub enum ParseError {
         line_number: usize,
         parse_error: ParseIntError,
     },
-    EndAlreadyDefined {
+    EndsAlreadyDefined {
         line_number: usize,
+    },
+    MissingEndsCount {
+        line_number: usize,
+    },
+    InvalidEndsCount {
+        line_number: usize,
+        parse_error: ParseIntError,
     },
     MissingEndX {
         line_number: usize,
@@ -293,8 +330,19 @@ pub enum ParseError {
         line_number: usize,
         parse_error: ParseIntError,
     },
-    ChestAlreadyDefined {
+    UnexpectedEndOfEnds {
+        expected_lines: usize,
+        found_lines: usize,
+    },
+    ChestsAlreadyDefined {
         line_number: usize,
+    },
+    MissingChestsCount {
+        line_number: usize,
+    },
+    InvalidChestsCount {
+        line_number: usize,
+        parse_error: ParseIntError,
     },
     MissingChestX {
         line_number: usize,
@@ -309,6 +357,10 @@ pub enum ParseError {
     InvalidChestY {
         line_number: usize,
         parse_error: ParseIntError,
+    },
+    UnexpectedEndOfChests {
+        expected_lines: usize,
+        found_lines: usize,
     },
     WallsAlreadyDefined {
         line_number: usize,
@@ -340,8 +392,8 @@ pub enum ParseError {
     },
     MissingPuzzle,
     MissingStart,
-    MissingEnd,
-    MissingChest,
+    MissingEnds,
+    MissingChests,
     MissingWalls,
 }
 
@@ -351,8 +403,8 @@ impl brutalize_cli::State for State {
     fn parse(s: &str) -> Result<(State, Data), ParseError> {
         let mut puzzle = None;
         let mut start_pos = None;
-        let mut end_pos = None;
-        let mut chest_pos = None;
+        let mut ends = None;
+        let mut chests = None;
         let mut walls = None;
 
         let mut lines = s.lines().enumerate();
@@ -440,51 +492,95 @@ impl brutalize_cli::State for State {
 
                     start_pos = Some(Vec2::new(start_x, start_y))
                 }
-                "end" => {
-                    if end_pos.is_some() {
-                        return Err(ParseError::EndAlreadyDefined { line_number });
+                "ends" => {
+                    if ends.is_some() {
+                        return Err(ParseError::EndsAlreadyDefined { line_number });
                     }
-                    let end_x = pieces
+                    let size = pieces
                         .next()
-                        .ok_or(ParseError::MissingEndX { line_number })?
+                        .ok_or(ParseError::MissingEndsCount { line_number })?
                         .parse()
-                        .map_err(|parse_error| ParseError::InvalidEndX {
-                            line_number,
-                            parse_error,
-                        })?;
-                    let end_y = pieces
-                        .next()
-                        .ok_or(ParseError::MissingEndY { line_number })?
-                        .parse()
-                        .map_err(|parse_error| ParseError::InvalidEndY {
+                        .map_err(|parse_error| ParseError::InvalidEndsCount {
                             line_number,
                             parse_error,
                         })?;
 
-                    end_pos = Some(Vec2::new(end_x, end_y))
+                    let mut read_ends = ArrayVec::new();
+                    for i in 0..size {
+                        let (line_number, line) =
+                            lines.next().ok_or(ParseError::UnexpectedEndOfEnds {
+                                expected_lines: size,
+                                found_lines: i,
+                            })?;
+
+                        let mut pieces = line.split(' ');
+                        let x = pieces
+                            .next()
+                            .ok_or(ParseError::MissingEndX { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidEndX {
+                                line_number,
+                                parse_error,
+                            })?;
+                        let y = pieces
+                            .next()
+                            .ok_or(ParseError::MissingEndY { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidEndY {
+                                line_number,
+                                parse_error,
+                            })?;
+
+                        read_ends.push(Vec2::new(x, y));
+                    }
+
+                    ends = Some(read_ends);
                 }
-                "chest" => {
-                    if chest_pos.is_some() {
-                        return Err(ParseError::ChestAlreadyDefined { line_number });
+                "chests" => {
+                    if chests.is_some() {
+                        return Err(ParseError::ChestsAlreadyDefined { line_number });
                     }
-                    let chest_x = pieces
+                    let size = pieces
                         .next()
-                        .ok_or(ParseError::MissingChestX { line_number })?
+                        .ok_or(ParseError::MissingChestsCount { line_number })?
                         .parse()
-                        .map_err(|parse_error| ParseError::InvalidChestX {
-                            line_number,
-                            parse_error,
-                        })?;
-                    let chest_y = pieces
-                        .next()
-                        .ok_or(ParseError::MissingChestY { line_number })?
-                        .parse()
-                        .map_err(|parse_error| ParseError::InvalidChestY {
+                        .map_err(|parse_error| ParseError::InvalidChestsCount {
                             line_number,
                             parse_error,
                         })?;
 
-                    chest_pos = Some(Vec2::new(chest_x, chest_y))
+                    let mut read_chests = ArrayVec::new();
+                    for i in 0..size {
+                        let (line_number, line) =
+                            lines.next().ok_or(ParseError::UnexpectedEndOfChests {
+                                expected_lines: size,
+                                found_lines: i,
+                            })?;
+
+                        let mut pieces = line.split(' ');
+                        let x = pieces
+                            .next()
+                            .ok_or(ParseError::MissingChestX { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidChestX {
+                                line_number,
+                                parse_error,
+                            })?;
+                        let y = pieces
+                            .next()
+                            .ok_or(ParseError::MissingChestY { line_number })?
+                            .parse()
+                            .map_err(|parse_error| ParseError::InvalidChestY {
+                                line_number,
+                                parse_error,
+                            })?;
+
+                        read_chests.push(Chest {
+                            position: Vec2::new(x, y),
+                        });
+                    }
+
+                    chests = Some(read_chests);
                 }
                 "walls" => {
                     if walls.is_some() {
@@ -543,35 +639,41 @@ impl brutalize_cli::State for State {
 
         let (size, tiles) = puzzle.ok_or(ParseError::MissingPuzzle)?;
         let start_pos = start_pos.ok_or(ParseError::MissingStart)?;
-        let end_pos = end_pos.ok_or(ParseError::MissingEnd)?;
-        let chest_pos = chest_pos.ok_or(ParseError::MissingChest)?;
+        let ends = ends.ok_or(ParseError::MissingEnds)?;
+        let chests = chests.ok_or(ParseError::MissingChests)?;
         let walls = walls.ok_or(ParseError::MissingWalls)?;
 
         // Log
-        println!("Parsed data:");
-        println!("Size: {:?} x {:?}", size.x, size.y);
-        println!("Tiles:");
-        for y in 0..size.y {
-            for x in 0..size.x {
-                let index = (x + y * size.x) as usize;
-                print!("{:?} ", tiles[index]);
-            }
-            println!();
-        }
-        println!("Start position: {:?}", start_pos);
-        println!("Goal position: {:?}", end_pos);
-        println!("Chest position: {:?}", chest_pos);
-        println!("Walls:");
-        for wall in &walls {
-            println!("Position: {:?}", wall.position);
-        }
+        // println!("Parsed data:");
+        // println!("Size: {:?} x {:?}", size.x, size.y);
+        // println!("Tiles:");
+        // for y in 0..size.y {
+        //     for x in 0..size.x {
+        //         let index = (x + y * size.x) as usize;
+        //         print!("{:?} ", tiles[index]);
+        //     }
+        //     println!();
+        // }
+        // println!("Start position: {:?}", start_pos);
+        // println!("Ends:");
+        // for end in &ends {
+        //     println!("Position: {:?}", end);
+        // }
+        // println!("Chests:");
+        // for chest in &chests {
+        //     println!("Position: {:?}", chest.position);
+        // }
+        // println!("Walls:");
+        // for wall in &walls {
+        //     println!("Position: {:?}", wall.position);
+        // }
 
         let data = Data {
             size,
             tiles,
-            goal_position: end_pos,
+            goal_positions: ends,
         };
-        Ok((State::initial(start_pos, chest_pos, walls), data))
+        Ok((State::initial(start_pos, chests, walls), data))
     }
 
     fn display(&self, data: &Self::Data, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -590,18 +692,23 @@ impl brutalize_cli::State for State {
             }
         }
 
-        // Add goal to the board
-        let index = (data.goal_position.x + 1) + (data.goal_position.y + 1) * board_width;
-        board[index as usize] = '*';
+        // Add goals to the board
+        for end in data.goal_positions.iter() {
+            let index = (end.x + 1) + (end.y + 1) * board_width;
+            board[index as usize] = '*';
+        }
 
         for wall in self.walls.iter() {
             let index = (wall.position.x + 1) + (wall.position.y + 1) * board_width;
             board[index as usize] = '#';
         }
 
-        // Add chest and player to the board
-        let index = (self.chest.position.x + 1) + (self.chest.position.y + 1) * board_width;
-        board[index as usize] = 'X';
+        // Add chests and player to the board
+        for chest in self.chests.iter() {
+            let index = (chest.position.x + 1) + (chest.position.y + 1) * board_width;
+            board[index as usize] = 'X';
+        }
+
         let index = (self.player.position.x + 1) + (self.player.position.y + 1) * board_width;
         board[index as usize] = 'P';
 
