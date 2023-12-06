@@ -18,6 +18,7 @@ impl<'a, S: State> fmt::Display for DisplayState<'a, S> {
 struct Settings {
     verbose: bool,
     quiet: bool,
+    group: bool,
 }
 
 impl Settings {
@@ -25,6 +26,7 @@ impl Settings {
         Self {
             verbose: false,
             quiet: false,
+            group: false,
         }
     }
 }
@@ -40,6 +42,7 @@ where
         match arg.as_str() {
             "-v" => settings.verbose = true,
             "-q" => settings.quiet = true,
+            "-g" => settings.group = true,
             _ => paths.push(arg),
         }
     }
@@ -48,6 +51,7 @@ where
         println!("Usage: {} [-v -q] PATHS", env::args().next().unwrap());
         println!("  -v       Print states along with solutions");
         println!("  -q       Do not print solutions");
+        println!("  -g       Group actions with counters");
         println!("  PATHS    A list of paths to problem files");
     } else {
         for path in paths {
@@ -114,6 +118,21 @@ where
                         state = s;
                     }
                 }
+            } else if settings.group {
+                let mut iter = solution.iter().peekable();
+                while let Some(action) = iter.next() {
+                    let mut count = 1;
+                    while iter.peek() == Some(&action) {
+                        iter.next(); // Consume the next action as it's the same
+                        count += 1;
+                    }
+                    if count > 1 {
+                        print!("{}x{}, ", action, count);
+                    } else {
+                        print!("{}, ", action);
+                    }
+                }
+                println!();
             } else {
                 let mut actions = solution.iter();
                 if let Some(action) = actions.next() {

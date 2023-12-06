@@ -901,6 +901,25 @@ impl brutalize_cli::State for State {
         let ladders = ladders.unwrap_or_default();
         let sausages = sausages.ok_or(ParseError::MissingSausages)?;
 
+        // >>>>>
+        // println!("Parsed data:");
+        // println!("Size: {:?} x {:?}", size.x, size.y);
+        // println!("Tiles:");
+        // for y in 0..size.y {
+        //     for x in 0..size.x {
+        //         let index = (x + y * size.x) as usize;
+        //         print!("{:?} ", tiles[index]);
+        //     }
+        //     println!();
+        // }
+        // println!("Goal position: {:?}", goal_position);
+        // println!("Goal orientation: {:?}", goal_orientation);
+        // println!("Sausages:");
+        // for sausage in &sausages {
+        //     println!("Position: {:?}, Orientation: {:?}", sausage.position, sausage.orientation);
+        // }
+        // <<<<
+
         let data = Data {
             size,
             tiles,

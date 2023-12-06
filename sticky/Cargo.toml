@@ -1,0 +1,14 @@
+[package]
+name = "sticky"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+brutalize = { path = "../brutalize" }
+brutalize_cli = { path = "../brutalize_cli" }
+solver_common = { path = "../solver_common" }
+arrayvec = "0.7"
+
+[[bin]]
+name = "sticky_solver"
+path = "src/main.rs"

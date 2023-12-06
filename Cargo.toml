@@ -5,6 +5,7 @@ members = [
     "brutalize_cli",
     "sausage",
     "solver_common",
+    "sticky",
 ]
 
 [profile.bench]
